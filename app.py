@@ -60,7 +60,7 @@ def extract_code(value):
 if st.button("Prediksi Dropout"):
     input_data = {k: extract_code(v) for k, v in inputs.items()}
     df = pd.DataFrame([input_data])
-    df_scaled = scaler.transform(df)
+    df_scaled = scaler.transform(df.values)
     prediction = model.predict(df_scaled)[0]
     prob = model.predict_proba(df_scaled)[0][1]
 
