@@ -1,70 +1,49 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 
-model = joblib.load("models/logreg.pkl")
+# Load model dan scaler
+model = joblib.load("models/logreg.pkl")  # atau model lain sesuai pilihan
 scaler = joblib.load("models/scaler.pkl")
 
-st.title("Prediksi Risiko Dropout Mahasiswa")
+# Load data bersih untuk ambil urutan dan nama kolom
+data = pd.read_csv("data_bersih.csv")
+fitur = data.drop("Status", axis=1).columns.tolist()
 
-inputs = {}
+st.title("🎓 Prediksi Risiko Dropout Mahasiswa")
 
-inputs["Marital_status"] = st.selectbox("Status Pernikahan", [
-    "1 - Single", "2 - Married", "3 - Widower", "4 - Divorced", "5 - Facto Union", "6 - Legally Separated"
-])
+st.markdown("Silakan isi data mahasiswa di bawah ini untuk memprediksi apakah mereka berisiko dropout:")
 
-inputs["Application_mode"] = st.selectbox("Mode Aplikasi", [
-    "1 - 1st phase - general contingent", "2 - Ordinance No. 612/93",
-    "5 - 1st phase - special contingent (Azores Island)", "7 - Other higher courses",
-    "10 - Ordinance No. 854-B/99", "15 - International student", "16 - Madeira contingent",
-    "17 - 2nd phase", "18 - 3rd phase", "26 - Diff Plan", "27 - Other Institution",
-    "39 - Over 23", "42 - Transfer", "43 - Change of course", "44 - Tech diploma holders",
-    "51 - Change institution", "53 - Short cycle diploma", "57 - Intl change"
-])
+# Buat input sesuai fitur
+input_dict = {}
 
-inputs["Course"] = st.selectbox("Program Studi", [
-    "33 - Biofuel Tech", "171 - Animation", "8014 - Soc Service (evening)", "9003 - Agronomy",
-    "9070 - Comm Design", "9085 - Vet Nursing", "9119 - Info Eng", "9130 - Equinculture",
-    "9147 - Management", "9238 - Social Service", "9254 - Tourism", "9500 - Nursing",
-    "9556 - Oral Hygiene", "9670 - Ad & Marketing", "9773 - Journalism", "9853 - Basic Ed",
-    "9991 - Management (evening)"
-])
-
-qualification_options = [
-    "1 - Basic 1st Cycle", "2 - Basic 2nd Cycle", "3 - Basic 3rd Cycle",
-    "4 - Secondary", "5 - Higher Ed - Bachelor", "6 - Higher Ed - Master",
-    "9 - Unknown", "10 - Not Applicable", "14 - Doctorate"
-]
-
-occupation_options = [
-    "0 - Unemployed", "1 - Armed Forces", "2 - Management", "3 - Professionals",
-    "4 - Technicians", "5 - Clerical", "6 - Service and Sales", "7 - Agriculture",
-    "8 - Skilled Manual", "9 - Elementary", "10 - Unknown", "11 - Not Applicable"
-]
-
-inputs["Mothers_qualification"] = st.selectbox("Kualifikasi Ibu", qualification_options)
-inputs["Fathers_qualification"] = st.selectbox("Kualifikasi Ayah", qualification_options)
-inputs["Mothers_occupation"] = st.selectbox("Pekerjaan Ibu", occupation_options)
-inputs["Fathers_occupation"] = st.selectbox("Pekerjaan Ayah", occupation_options)
-inputs["Previous_qualification"] = st.selectbox("Kualifikasi Sebelumnya", qualification_options)
-
-inputs["Displaced"] = st.selectbox("Displaced", ["0 - Tidak", "1 - Ya"])
-inputs["Debtor"] = st.selectbox("Peminjam", ["0 - Tidak", "1 - Ya"])
-inputs["Tuition_fees_up_to_date"] = st.selectbox("Biaya Lunas", ["0 - Tidak", "1 - Ya"])
-inputs["Gender"] = st.selectbox("Jenis Kelamin", ["0 - Perempuan", "1 - Laki-laki"])
-inputs["Scholarship_holder"] = st.selectbox("Beasiswa", ["0 - Tidak", "1 - Ya"])
-
-def extract_code(value):
-    return int(value.split(" - ")[0])
-
-if st.button("Prediksi Dropout"):
-    input_data = {k: extract_code(v) for k, v in inputs.items()}
-    df = pd.DataFrame([input_data])
-    df_scaled = scaler.transform(df.values)
-    prediction = model.predict(df_scaled)[0]
-    prob = model.predict_proba(df_scaled)[0][1]
-
-    if prediction == 1:
-        st.error(f"⚠️ Diprediksi Dropout (Probabilitas: {prob:.2f})")
+for kolom in fitur:
+    if "nilai" in kolom.lower() or "gdp" in kolom.lower() or "%" in kolom or "rata" in kolom.lower():
+        # Kolom numerik pecahan
+        input_dict[kolom] = st.number_input(f"{kolom}", format="%.2f", step=0.01)
+    elif data[kolom].nunique() <= 5:
+        # Kolom kategori (biasa bernilai 0/1 atau 0-4)
+        unique_vals = sorted(data[kolom].unique().tolist())
+        input_dict[kolom] = st.selectbox(f"{kolom}", unique_vals)
     else:
-        st.success(f"✅ Diprediksi Bertahan (Probabilitas dropout: {prob:.2f})")
+        # Kolom numerik integer biasa
+        input_dict[kolom] = st.number_input(f"{kolom}", step=1)
+
+# Ketika tombol ditekan
+if st.button("🔍 Prediksi"):
+    try:
+        input_df = pd.DataFrame([input_dict])[fitur]
+        input_scaled = scaler.transform(input_df)
+        hasil = model.predict(input_scaled)[0]
+        probas = model.predict_proba(input_scaled)[0] if hasattr(model, "predict_proba") else None
+
+        if hasil == 1:
+            st.error("❌ Mahasiswa diprediksi BERISIKO DROPOUT.")
+        else:
+            st.success("✅ Mahasiswa diprediksi TIDAK dropout.")
+
+        if probas is not None:
+            st.info(f"Probabilitas Dropout: {probas[1]*100:.2f}%")
+    except Exception as e:
+        st.error(f"Terjadi error saat prediksi: {str(e)}") 
