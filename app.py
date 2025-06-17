@@ -1,5 +1,14 @@
 import streamlit as st
 import pandas as pd
+import joblib
+
+# Load model, scaler, encoder
+model = joblib.load("gboost_model.joblib")
+scaler = joblib.load("scaler.joblib")
+encoder = joblib.load("encoder.joblib")
+pca = joblib.load("pca.joblib")
+
+st.title("Prediksi Risiko Dropout Mahasiswa")
 
 inputs = {}
 
@@ -53,5 +62,20 @@ inputs["Scholarship_holder"] = st.selectbox("Beasiswa", ["0 - Tidak", "1 - Ya"])
 def extract_int(value):
     return int(str(value).split(" - ")[0]) if " - " in str(value) else int(value)
 
-input_df = pd.DataFrame([inputs])
-input_df = input_df.applymap(extract_int)
+if st.button("Prediksi Dropout"):
+    input_df = pd.DataFrame([inputs])
+    input_df = input_df.applymap(extract_int)
+
+    # Pisahkan kolom kategorikal dan numerik
+    categorical_cols = input_df.select_dtypes(include='int').columns.tolist()
+    encoded = encoder.transform(input_df[categorical_cols])
+    scaled = scaler.transform(encoded)
+    reduced = pca.transform(scaled)
+
+    pred = model.predict(reduced)[0]
+    proba = model.predict_proba(reduced)[0][1]
+
+    if pred == 1:
+        st.error(f"⚠️ Mahasiswa diprediksi berisiko dropout (probabilitas: {proba:.2f})")
+    else:
+        st.success(f"✅ Mahasiswa diprediksi akan tetap lanjut studi (probabilitas dropout: {proba:.2f})")
