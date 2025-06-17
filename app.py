@@ -2,11 +2,8 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-# Load model, scaler, encoder
-model = joblib.load("gboost_model.joblib")
-scaler = joblib.load("scaler.joblib")
-encoder = joblib.load("encoder.joblib")
-pca = joblib.load("pca.joblib")
+model = joblib.load("models/logreg.pkl")
+scaler = joblib.load("models/scaler.pkl")
 
 st.title("Prediksi Risiko Dropout Mahasiswa")
 
@@ -33,25 +30,23 @@ inputs["Course"] = st.selectbox("Program Studi", [
     "9991 - Management (evening)"
 ])
 
-mothers_qualification_options = [
+qualification_options = [
     "1 - Basic 1st Cycle", "2 - Basic 2nd Cycle", "3 - Basic 3rd Cycle",
-    "4 - Secondary", "5 - Higher Education - Bachelor", "6 - Higher Education - Master",
-    "9 - Unknown", "10 - Not Applicable", "14 - Higher Education - Doctorate"
+    "4 - Secondary", "5 - Higher Ed - Bachelor", "6 - Higher Ed - Master",
+    "9 - Unknown", "10 - Not Applicable", "14 - Doctorate"
 ]
-
-fathers_qualification_options = mothers_qualification_options
 
 occupation_options = [
     "0 - Unemployed", "1 - Armed Forces", "2 - Management", "3 - Professionals",
-    "4 - Technicians", "5 - Clerical", "6 - Service and sales", "7 - Agriculture",
-    "8 - Skilled manual", "9 - Elementary", "10 - Unknown", "11 - Not Applicable"
+    "4 - Technicians", "5 - Clerical", "6 - Service and Sales", "7 - Agriculture",
+    "8 - Skilled Manual", "9 - Elementary", "10 - Unknown", "11 - Not Applicable"
 ]
 
-inputs["Mothers_qualification"] = st.selectbox("Kualifikasi Ibu", mothers_qualification_options)
-inputs["Fathers_qualification"] = st.selectbox("Kualifikasi Ayah", fathers_qualification_options)
+inputs["Mothers_qualification"] = st.selectbox("Kualifikasi Ibu", qualification_options)
+inputs["Fathers_qualification"] = st.selectbox("Kualifikasi Ayah", qualification_options)
 inputs["Mothers_occupation"] = st.selectbox("Pekerjaan Ibu", occupation_options)
 inputs["Fathers_occupation"] = st.selectbox("Pekerjaan Ayah", occupation_options)
-inputs["Previous_qualification"] = st.selectbox("Kualifikasi Sebelumnya", mothers_qualification_options)
+inputs["Previous_qualification"] = st.selectbox("Kualifikasi Sebelumnya", qualification_options)
 
 inputs["Displaced"] = st.selectbox("Displaced", ["0 - Tidak", "1 - Ya"])
 inputs["Debtor"] = st.selectbox("Peminjam", ["0 - Tidak", "1 - Ya"])
@@ -59,23 +54,17 @@ inputs["Tuition_fees_up_to_date"] = st.selectbox("Biaya Lunas", ["0 - Tidak", "1
 inputs["Gender"] = st.selectbox("Jenis Kelamin", ["0 - Perempuan", "1 - Laki-laki"])
 inputs["Scholarship_holder"] = st.selectbox("Beasiswa", ["0 - Tidak", "1 - Ya"])
 
-def extract_int(value):
-    return int(str(value).split(" - ")[0]) if " - " in str(value) else int(value)
+def extract_code(value):
+    return int(value.split(" - ")[0])
 
 if st.button("Prediksi Dropout"):
-    input_df = pd.DataFrame([inputs])
-    input_df = input_df.applymap(extract_int)
+    input_data = {k: extract_code(v) for k, v in inputs.items()}
+    df = pd.DataFrame([input_data])
+    df_scaled = scaler.transform(df)
+    prediction = model.predict(df_scaled)[0]
+    prob = model.predict_proba(df_scaled)[0][1]
 
-    # Pisahkan kolom kategorikal dan numerik
-    categorical_cols = input_df.select_dtypes(include='int').columns.tolist()
-    encoded = encoder.transform(input_df[categorical_cols])
-    scaled = scaler.transform(encoded)
-    reduced = pca.transform(scaled)
-
-    pred = model.predict(reduced)[0]
-    proba = model.predict_proba(reduced)[0][1]
-
-    if pred == 1:
-        st.error(f"⚠️ Mahasiswa diprediksi berisiko dropout (probabilitas: {proba:.2f})")
+    if prediction == 1:
+        st.error(f"⚠️ Diprediksi Dropout (Probabilitas: {prob:.2f})")
     else:
-        st.success(f"✅ Mahasiswa diprediksi akan tetap lanjut studi (probabilitas dropout: {proba:.2f})")
+        st.success(f"✅ Diprediksi Bertahan (Probabilitas dropout: {prob:.2f})")
