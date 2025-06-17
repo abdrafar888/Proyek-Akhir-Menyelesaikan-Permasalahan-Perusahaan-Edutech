@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, ConfusionMatrixDisplay
 import joblib
@@ -25,6 +26,7 @@ st.markdown("Prototype untuk mendeteksi mahasiswa berisiko dropout berdasarkan d
 # Load Model dan Data
 # =============================
 data = pd.read_csv("data_bersih.csv")
+scaler = joblib.load("models/scaler.pkl")
 models = {
     "Logistic Regression": joblib.load("models/logreg.pkl"),
     "Random Forest": joblib.load("models/randomforest.pkl"),
@@ -33,50 +35,78 @@ models = {
     "Naive Bayes": joblib.load("models/naivebayes.pkl"),
     "KNN": joblib.load("models/knn.pkl"),
 }
-scaler = joblib.load("models/scaler.pkl")
 
 # =============================
 # Sidebar: Pilih Model
 # =============================
 st.sidebar.header("🧠 Pilih Model")
 model_name = st.sidebar.selectbox("Model", list(models.keys()))
-run_button = st.sidebar.button("🚀 Jalankan Model")
 
 # =============================
-# Jalankan Model dan Evaluasi
+# Tab: Evaluasi vs Prediksi Baru
 # =============================
-if run_button:
-    # Persiapkan data
-    X = data.drop(columns=["Status"])
-    y = data["Status"]
-    X_scaled = scaler.transform(X)
+tab1, tab2 = st.tabs(["🔎 Evaluasi Model", "🧠 Prediksi Mahasiswa Baru"])
 
-    # Prediksi
-    model = models[model_name]
-    y_pred = model.predict(X_scaled)
+# =============================
+# Tab 1: Evaluasi Model
+# =============================
+with tab1:
+    if st.button("🚀 Jalankan Evaluasi"):
+        X = data.drop(columns=["Status"])
+        y = data["Status"]
+        X_scaled = scaler.transform(X)
+        model = models[model_name]
+        y_pred = model.predict(X_scaled)
 
-    # Evaluasi
-    acc = accuracy_score(y, y_pred)
-    cm = confusion_matrix(y, y_pred)
-    report = classification_report(y, y_pred, target_names=["Not Dropout", "Dropout"])
+        acc = accuracy_score(y, y_pred)
+        cm = confusion_matrix(y, y_pred)
+        report = classification_report(y, y_pred, target_names=["Not Dropout", "Dropout"])
 
-    # Tampilkan hasil evaluasi
-    st.subheader(f"📊 Hasil Evaluasi Model: {model_name}")
-    st.markdown(f"**🎯 Akurasi:** `{acc:.4f}`")
+        st.subheader(f"📊 Hasil Evaluasi Model: {model_name}")
+        st.markdown(f"**🎯 Akurasi:** `{acc:.4f}`")
 
-    st.markdown("#### 📌 Confusion Matrix")
-    fig, ax = plt.subplots()
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Not Dropout", "Dropout"])
-    disp.plot(ax=ax, cmap="Blues", values_format="d")
-    st.pyplot(fig)
+        st.markdown("#### 📌 Confusion Matrix")
+        fig, ax = plt.subplots()
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Not Dropout", "Dropout"])
+        disp.plot(ax=ax, cmap="Blues", values_format="d")
+        st.pyplot(fig)
 
-    st.markdown("#### 🧾 Classification Report")
-    st.text(report)
+        st.markdown("#### 🧾 Classification Report")
+        st.text(report)
 
-    # Tampilkan data mahasiswa di bagian bawah
-    st.markdown("#### 🔍 Data Mahasiswa")
-    st.dataframe(X, use_container_width=True)
+        st.markdown("#### 🔍 Data Mahasiswa")
+        st.dataframe(X, use_container_width=True)
 
+# =============================
+# Tab 2: Prediksi Mahasiswa Baru
+# =============================
+with tab2:
+    st.markdown("Masukkan data mahasiswa baru di bawah ini untuk memprediksi apakah ia berisiko dropout.")
+
+    contoh = data.drop(columns=["Status"]).iloc[0]  # ambil kolom dan urutannya
+    input_data = {}
+    for col in contoh.index:
+        val = st.number_input(f"{col}", value=float(contoh[col]), format="%.2f")
+        input_data[col] = val
+
+    if st.button("🔍 Prediksi Dropout"):
+        df_input = pd.DataFrame([input_data])
+        df_scaled = scaler.transform(df_input)
+        model = models[model_name]
+        pred = model.predict(df_scaled)[0]
+        prob = model.predict_proba(df_scaled)[0][1] if hasattr(model, "predict_proba") else None
+
+        st.subheader("📢 Hasil Prediksi")
+        if pred == 1:
+            st.error(f"🚨 Mahasiswa ini **berisiko DROP OUT**.")
+        else:
+            st.success(f"✅ Mahasiswa ini **TIDAK berisiko dropout**.")
+
+        if prob is not None:
+            st.markdown(f"**Probabilitas Dropout:** `{prob:.2%}`")
+
+# =============================
 # Footer
+# =============================
 st.markdown("---")
 st.markdown("© 2025 Abdul Rafar · Jaya Jaya Institut")
