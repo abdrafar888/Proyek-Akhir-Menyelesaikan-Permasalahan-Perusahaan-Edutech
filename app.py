@@ -41,3 +41,7 @@ if submitted:
     label = "Dropout" if prediction == 1 else "Tidak Dropout"
 
     st.success(f"📊 Hasil Prediksi: **{label}**")
+    st.write("Kolom input:", input_df.columns.tolist())
+    st.write("Kolom yang diminta scaler:", scaler.feature_names_in_)
+
+
