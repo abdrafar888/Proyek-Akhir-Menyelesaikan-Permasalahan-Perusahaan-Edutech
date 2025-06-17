@@ -1,90 +1,153 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, ConfusionMatrixDisplay
-import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Prediksi Dropout Mahasiswa", layout="wide", page_icon="🎓")
-st.title("🎓 Prediksi Dropout Mahasiswa")
-st.markdown("Prototype untuk mendeteksi mahasiswa berisiko dropout berdasarkan data akademik dan demografis.")
+st.set_page_config(page_title="Prediksi Status Mahasiswa", layout="wide")
+st.title("🎓 Prediksi Status Mahasiswa")
+st.markdown("Isi data berikut untuk memprediksi status mahasiswa berdasarkan informasi akademik dan demografis.")
 
-data = pd.read_csv("data_bersih.csv")
-models = {
-    "Logistic Regression": joblib.load("models/logreg.pkl"),
-    "Random Forest": joblib.load("models/randomforest.pkl"),
-    "Decision Tree": joblib.load("models/decisiontree.pkl"),
-    "SVM": joblib.load("models/svm.pkl"),
-    "Naive Bayes": joblib.load("models/naivebayes.pkl"),
-    "KNN": joblib.load("models/knn.pkl"),
-}
-scaler = joblib.load("models/scaler.pkl")
+model = joblib.load("model/gboost_model.joblib")
+target_encoder = joblib.load("model/encoder_target.joblib")
+pca_1 = joblib.load("model/pca_1.joblib")
+pca_2 = joblib.load("model/pca_2.joblib")
 
-st.sidebar.header("🧠 Pilih Model")
-model_name = st.sidebar.selectbox("Model", list(models.keys()))
-menu = st.sidebar.radio("Pilih Mode", ["Evaluasi Model", "Prediksi Mahasiswa Baru"])
+numerical_pca_1 = [
+    'Curricular_units_1st_sem_enrolled', 'Curricular_units_1st_sem_evaluations',
+    'Curricular_units_1st_sem_approved', 'Curricular_units_1st_sem_grade',
+    'Curricular_units_2nd_sem_enrolled', 'Curricular_units_2nd_sem_evaluations',
+    'Curricular_units_2nd_sem_approved', 'Curricular_units_2nd_sem_grade'
+]
 
-if menu == "Evaluasi Model":
-    if st.sidebar.button("🚀 Jalankan Model"):
-        X = data.drop(columns=["Status"])
-        y = data["Status"]
-        X_scaled = scaler.transform(X)
-        model = models[model_name]
-        y_pred = model.predict(X_scaled)
-        acc = accuracy_score(y, y_pred)
-        cm = confusion_matrix(y, y_pred)
-        report = classification_report(y, y_pred, target_names=["Not Dropout", "Dropout"])
+numerical_pca_2 = [
+    'Previous_qualification_grade', 'Admission_grade', 'Age_at_enrollment',
+    'Unemployment_rate', 'Inflation_rate', 'GDP'
+]
 
-        st.subheader(f"📊 Evaluasi Model: {model_name}")
-        st.markdown(f"**🎯 Akurasi:** `{acc:.4f}`")
+categorical_columns = [
+    "Marital_status", "Application_mode", "Course", "Previous_qualification",
+    "Mothers_qualification", "Fathers_qualification", "Mothers_occupation",
+    "Fathers_occupation", "Displaced", "Debtor",
+    "Tuition_fees_up_to_date", "Gender", "Scholarship_holder",
+]
 
-        st.markdown("#### 📌 Confusion Matrix")
-        fig, ax = plt.subplots()
-        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Not Dropout", "Dropout"])
-        disp.plot(ax=ax, cmap="Blues", values_format="d")
-        st.pyplot(fig)
+scalers = {col: joblib.load(f"model/scaler_{col}.joblib") for col in numerical_pca_1 + numerical_pca_2}
+encoders = {col: joblib.load(f"model/encoder_{col}.joblib") for col in categorical_columns}
 
-        st.markdown("#### 🧾 Classification Report")
-        st.text(report)
+mothers_qualification_options = [
+    "1 - Secondary Education", "2 - Bachelor's Degree", "3 - Degree", "4 - Master's", "5 - Doctorate",
+    "6 - Frequency of Higher Education", "9 - 12th Year Not Completed", "10 - 11th Year Not Completed",
+    "11 - 7th Year (Old)", "12 - Other - 11th Year", "14 - 10th Year", "18 - General Commerce",
+    "19 - Basic Ed 3rd Cycle", "22 - Technical-professional", "26 - 7th year",
+    "27 - 2nd cycle high school", "29 - 9th Year Not Completed", "30 - 8th year", "34 - Unknown",
+    "35 - Can't read/write", "36 - Can read (no 4th year)", "37 - Basic Ed 1st Cycle",
+    "38 - Basic Ed 2nd Cycle", "39 - Tech specialization", "40 - Degree (1st cycle)",
+    "41 - Specialized studies", "42 - Prof. higher tech", "43 - Master (2nd cycle)",
+    "44 - Doctorate (3rd cycle)"
+]
 
-        st.markdown("#### 🔍 Data Mahasiswa")
-        st.dataframe(X, use_container_width=True)
+fathers_qualification_options = [
+    "1 - Secondary Education", "2 - Bachelor's Degree", "3 - Degree", "4 - Master's", "5 - Doctorate",
+    "6 - Frequency of Higher Education", "9 - 12th Year Not Completed", "10 - 11th Year Not Completed",
+    "11 - 7th Year (Old)", "12 - Other - 11th Year", "13 - 2nd year complementary", "14 - 10th Year",
+    "18 - General Commerce", "19 - Basic Ed 3rd Cycle", "20 - Complementary High School",
+    "22 - Technical-professional", "25 - Comp. High School - not completed", "26 - 7th year",
+    "27 - 2nd cycle high school", "29 - 9th Year Not Completed", "30 - 8th year", "31 - Admin & Commerce",
+    "33 - Accounting & Admin", "34 - Unknown", "35 - Can't read/write", "36 - Can read (no 4th year)",
+    "37 - Basic Ed 1st Cycle", "38 - Basic Ed 2nd Cycle", "39 - Tech specialization",
+    "40 - Degree (1st cycle)", "41 - Specialized studies", "42 - Prof. higher tech",
+    "43 - Master (2nd cycle)", "44 - Doctorate (3rd cycle)"
+]
 
-elif menu == "Prediksi Mahasiswa Baru":
-    st.subheader("📝 Formulir Data Mahasiswa Baru")
+occupation_options = [
+    "0 - Student", "1 - Legislative/Executive", "2 - Scientific Specialists", "3 - Technicians",
+    "4 - Admin Staff", "5 - Services/Sellers", "6 - Farmers", "7 - Construction Workers",
+    "8 - Machine Operators", "9 - Unskilled Workers", "10 - Armed Forces", "90 - Other", "99 - Blank",
+    "101 - Armed Forces Officers", "102 - Sergeants", "103 - Other Armed Forces",
+    "112 - Admin Service Directors", "114 - Hotel/Trade Directors", "121 - Science/Engineering",
+    "122 - Health Professionals", "123 - Teachers", "124 - Finance Specialists", "125 - ICT Specialists",
+    "131 - Mid Sci/Eng Tech", "132 - Mid Health Tech", "134 - Mid Legal/Cultural", "135 - ICT Tech",
+    "141 - Secretaries/Data Ops", "143 - Finance Ops", "144 - Admin Support", "151 - Personal Service",
+    "152 - Sellers", "153 - Care Workers", "154 - Security", "161 - Market Farmers",
+    "163 - Subsistence Farmers", "171 - Skilled Construction", "172 - Metalworkers", "173 - Artisans",
+    "174 - Electricians", "175 - Food/Wood/Clothing", "181 - Plant Operators", "182 - Assemblers",
+    "183 - Drivers", "191 - Cleaners", "192 - Unskilled Agriculture", "193 - Unskilled Construction",
+    "194 - Meal Prep", "195 - Street Vendors"
+]
 
-    with st.form("form_prediksi"):
-        input_data = {}
-        col1, col2 = st.columns(2)
+def extract_int(value):
+    try:
+        return int(str(value).split(" - ")[0])
+    except:
+        return value
 
-        with col1:
-            input_data["Admission_grade"] = st.number_input("Admission Grade", min_value=0.0, max_value=200.0, step=0.1)
-            input_data["Age_at_enrollment"] = st.number_input("Umur Saat Mendaftar", min_value=15, max_value=100)
-            input_data["Unemployment_rate"] = st.number_input("Tingkat Pengangguran", step=0.1)
-            input_data["Inflation_rate"] = st.number_input("Tingkat Inflasi", step=0.1)
-            input_data["GDP"] = st.number_input("GDP", step=0.1)
-            input_data["Scholarship_holder"] = st.selectbox("Penerima Beasiswa", [0, 1])
-            input_data["Tuition_fees_up_to_date"] = st.selectbox("Biaya Kuliah Lunas", [0, 1])
+with st.form("form_prediksi"):
+    col1, col2 = st.columns(2)
+    inputs = {}
 
-        with col2:
-            input_data["Curricular_units_1st_sem_grade"] = st.number_input("Nilai Semester 1", step=0.1)
-            input_data["Curricular_units_2nd_sem_grade"] = st.number_input("Nilai Semester 2", step=0.1)
-            input_data["Curricular_units_1st_sem_approved"] = st.number_input("Lulus Semester 1", step=1)
-            input_data["Curricular_units_2nd_sem_approved"] = st.number_input("Lulus Semester 2", step=1)
-            input_data["Curricular_units_1st_sem_enrolled"] = st.number_input("Ambil Semester 1", step=1)
-            input_data["Curricular_units_2nd_sem_enrolled"] = st.number_input("Ambil Semester 2", step=1)
-            input_data["Gender"] = st.selectbox("Jenis Kelamin", [0, 1])
+    with col1:
+        inputs["Marital_status"] = st.selectbox("Status Pernikahan", [
+            "1 - Single", "2 - Married", "3 - Widower", "4 - Divorced", "5 - Facto Union", "6 - Legally Separated"
+        ])
+        inputs["Application_mode"] = st.selectbox("Mode Aplikasi", [
+            "1 - 1st phase - general contingent", "2 - Ordinance No. 612/93",
+            "5 - 1st phase - special contingent (Azores Island)", "7 - Other higher courses",
+            "10 - Ordinance No. 854-B/99", "15 - International student", "16 - Madeira contingent",
+            "17 - 2nd phase", "18 - 3rd phase", "26 - Diff Plan", "27 - Other Institution",
+            "39 - Over 23", "42 - Transfer", "43 - Change of course", "44 - Tech diploma holders",
+            "51 - Change institution", "53 - Short cycle diploma", "57 - Intl change"
+        ])
+        inputs["Course"] = st.selectbox("Program Studi", [
+            "33 - Biofuel Tech", "171 - Animation", "8014 - Soc Service (evening)", "9003 - Agronomy",
+            "9070 - Comm Design", "9085 - Vet Nursing", "9119 - Info Eng", "9130 - Equinculture",
+            "9147 - Management", "9238 - Social Service", "9254 - Tourism", "9500 - Nursing",
+            "9556 - Oral Hygiene", "9670 - Ad & Marketing", "9773 - Journalism", "9853 - Basic Ed",
+            "9991 - Management (evening)"
+        ])
+        inputs["Mothers_qualification"] = st.selectbox("Kualifikasi Ibu", mothers_qualification_options)
+        inputs["Fathers_qualification"] = st.selectbox("Kualifikasi Ayah", fathers_qualification_options)
+        inputs["Mothers_occupation"] = st.selectbox("Pekerjaan Ibu", occupation_options)
+        inputs["Fathers_occupation"] = st.selectbox("Pekerjaan Ayah", occupation_options)
+        inputs["Previous_qualification"] = st.selectbox("Kualifikasi Sebelumnya", mothers_qualification_options)
+        inputs["Displaced"] = st.selectbox("Displaced", ["0 - Tidak", "1 - Ya"])
+        inputs["Debtor"] = st.selectbox("Peminjam", ["0 - Tidak", "1 - Ya"])
+        inputs["Tuition_fees_up_to_date"] = st.selectbox("Biaya Lunas", ["0 - Tidak", "1 - Ya"])
+        inputs["Gender"] = st.selectbox("Jenis Kelamin", ["0 - Perempuan", "1 - Laki-laki"])
+        inputs["Scholarship_holder"] = st.selectbox("Beasiswa", ["0 - Tidak", "1 - Ya"])
 
-        submitted = st.form_submit_button("🔍 Prediksi Dropout")
+    with col2:
+        for col in numerical_pca_1 + numerical_pca_2:
+            label = col.replace("_", " ").capitalize()
+            inputs[col] = st.number_input(label, step=0.1, format="%.2f")
 
-    if submitted:
-        df_input = pd.DataFrame([input_data])
-        df_scaled = scaler.transform(df_input)
-        model = models[model_name]
-        pred = model.predict(df_scaled)
-        label = "Dropout" if pred[0] == 1 else "Tidak Dropout"
+    submitted = st.form_submit_button("🔍 Prediksi Status Mahasiswa")
 
-        st.success(f"🎯 Prediksi Status Mahasiswa: **{label}**")
+if submitted:
+    input_df = pd.DataFrame([inputs])
+    input_df = input_df.applymap(extract_int)
 
-st.markdown("---")
-st.markdown("© 2025 Abdul Rafar · Jaya Jaya Institut")
+    for col in numerical_pca_1 + numerical_pca_2:
+        input_df[[col]] = scalers[col].transform(input_df[[col]])
+
+    for col in categorical_columns:
+        input_df[[col]] = input_df[[col]].astype(str)
+        input_df[[col]] = encoders[col].transform(input_df[[col]])
+
+    pc1 = pca_1.transform(input_df[numerical_pca_1])
+    pc2 = pca_2.transform(input_df[numerical_pca_2])
+
+    pc1_df = pd.DataFrame(pc1, columns=[f"pc1_{i+1}" for i in range(pc1.shape[1])])
+    pc2_df = pd.DataFrame(pc2, columns=[f"pc2_{i+1}" for i in range(pc2.shape[1])])
+
+    final_df = input_df[categorical_columns].copy()
+    final_df = pd.concat([final_df, pc1_df, pc2_df], axis=1)
+
+    try:
+        final_df = final_df[model.feature_names_in_]
+    except:
+        expected_cols = categorical_columns + [f"pc1_{i+1}" for i in range(5)] + [f"pc2_{i+1}" for i in range(2)]
+        final_df = final_df[expected_cols]
+
+    pred = model.predict(final_df)
+    pred_label = target_encoder.inverse_transform(pred)[0]
+
+    st.success(f"🎯 Status Mahasiswa Diprediksi: **{pred_label}**")
