@@ -2,89 +2,89 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Prediksi Status Mahasiswa", layout="wide")
-st.title("🎓 Prediksi Status Mahasiswa")
-st.markdown("Formulir ini digunakan untuk memprediksi status mahasiswa berdasarkan data akademik dan demografis.")
+st.set_page_config(page_title="Prediksi Dropout Mahasiswa", layout="wide", page_icon="🎓")
+st.title("🎓 Prediksi Dropout Mahasiswa")
+st.markdown("Prototype untuk mendeteksi mahasiswa berisiko dropout berdasarkan data akademik dan demografis.")
 
-model = joblib.load("model/gboost_model.joblib")
-target_encoder = joblib.load("model/encoder_target.joblib")
-pca_1 = joblib.load("model/pca_1.joblib")
-pca_2 = joblib.load("model/pca_2.joblib")
+data = pd.read_csv("data_bersih.csv")
+models = {
+    "Logistic Regression": joblib.load("models/logreg.pkl"),
+    "Random Forest": joblib.load("models/randomforest.pkl"),
+    "Decision Tree": joblib.load("models/decisiontree.pkl"),
+    "SVM": joblib.load("models/svm.pkl"),
+    "Naive Bayes": joblib.load("models/naivebayes.pkl"),
+    "KNN": joblib.load("models/knn.pkl"),
+}
+scaler = joblib.load("models/scaler.pkl")
 
-numerical_pca_1 = [
-    'Curricular_units_1st_sem_enrolled', 'Curricular_units_1st_sem_evaluations',
-    'Curricular_units_1st_sem_approved', 'Curricular_units_1st_sem_grade',
-    'Curricular_units_2nd_sem_enrolled', 'Curricular_units_2nd_sem_evaluations',
-    'Curricular_units_2nd_sem_approved', 'Curricular_units_2nd_sem_grade'
-]
+st.sidebar.header("🧠 Pilih Model")
+model_name = st.sidebar.selectbox("Model", list(models.keys()))
+menu = st.sidebar.radio("Pilih Mode", ["Evaluasi Model", "Prediksi Mahasiswa Baru"])
 
-numerical_pca_2 = [
-    'Previous_qualification_grade', 'Admission_grade', 'Age_at_enrollment',
-    'Unemployment_rate', 'Inflation_rate', 'GDP'
-]
+if menu == "Evaluasi Model":
+    if st.sidebar.button("🚀 Jalankan Model"):
+        X = data.drop(columns=["Status"])
+        y = data["Status"]
+        X_scaled = scaler.transform(X)
+        model = models[model_name]
+        y_pred = model.predict(X_scaled)
+        acc = accuracy_score(y, y_pred)
+        cm = confusion_matrix(y, y_pred)
+        report = classification_report(y, y_pred, target_names=["Not Dropout", "Dropout"])
 
-categorical_columns = [
-    "Marital_status", "Application_mode", "Course", "Previous_qualification",
-    "Mothers_qualification", "Fathers_qualification", "Mothers_occupation",
-    "Fathers_occupation", "Displaced", "Debtor",
-    "Tuition_fees_up_to_date", "Gender", "Scholarship_holder",
-]
+        st.subheader(f"📊 Evaluasi Model: {model_name}")
+        st.markdown(f"**🎯 Akurasi:** `{acc:.4f}`")
 
-scalers = {col: joblib.load(f"model/scaler_{col}.joblib") for col in numerical_pca_1 + numerical_pca_2}
-encoders = {col: joblib.load(f"model/encoder_{col}.joblib") for col in categorical_columns}
+        st.markdown("#### 📌 Confusion Matrix")
+        fig, ax = plt.subplots()
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Not Dropout", "Dropout"])
+        disp.plot(ax=ax, cmap="Blues", values_format="d")
+        st.pyplot(fig)
 
-def extract_int(value):
-    try:
-        return int(str(value).split(" - ")[0])
-    except:
-        return value
+        st.markdown("#### 🧾 Classification Report")
+        st.text(report)
 
-with st.form("form_prediksi"):
-    st.subheader("📝 Data Mahasiswa")
+        st.markdown("#### 🔍 Data Mahasiswa")
+        st.dataframe(X, use_container_width=True)
 
-    col_kiri, col_kanan = st.columns(2)
-    inputs = {}
+elif menu == "Prediksi Mahasiswa Baru":
+    st.subheader("📝 Formulir Data Mahasiswa Baru")
 
-    with col_kiri:
-        for col in categorical_columns:
-            options = joblib.load(f"model/options_{col}.joblib")
-            inputs[col] = st.selectbox(col.replace("_", " ").capitalize(), options)
+    with st.form("form_prediksi"):
+        input_data = {}
+        col1, col2 = st.columns(2)
 
-    with col_kanan:
-        for col in numerical_pca_1 + numerical_pca_2:
-            label = col.replace("_", " ").capitalize()
-            inputs[col] = st.number_input(label, step=0.1, format="%.2f")
+        with col1:
+            input_data["Admission_grade"] = st.number_input("Admission Grade", min_value=0.0, max_value=200.0, step=0.1)
+            input_data["Age_at_enrollment"] = st.number_input("Umur Saat Mendaftar", min_value=15, max_value=100)
+            input_data["Unemployment_rate"] = st.number_input("Tingkat Pengangguran", step=0.1)
+            input_data["Inflation_rate"] = st.number_input("Tingkat Inflasi", step=0.1)
+            input_data["GDP"] = st.number_input("GDP", step=0.1)
+            input_data["Scholarship_holder"] = st.selectbox("Penerima Beasiswa", [0, 1])
+            input_data["Tuition_fees_up_to_date"] = st.selectbox("Biaya Kuliah Lunas", [0, 1])
 
-    prediksi_button = st.form_submit_button("🔍 Prediksi Status")
+        with col2:
+            input_data["Curricular_units_1st_sem_grade"] = st.number_input("Nilai Semester 1", step=0.1)
+            input_data["Curricular_units_2nd_sem_grade"] = st.number_input("Nilai Semester 2", step=0.1)
+            input_data["Curricular_units_1st_sem_approved"] = st.number_input("Lulus Semester 1", step=1)
+            input_data["Curricular_units_2nd_sem_approved"] = st.number_input("Lulus Semester 2", step=1)
+            input_data["Curricular_units_1st_sem_enrolled"] = st.number_input("Ambil Semester 1", step=1)
+            input_data["Curricular_units_2nd_sem_enrolled"] = st.number_input("Ambil Semester 2", step=1)
+            input_data["Gender"] = st.selectbox("Jenis Kelamin", [0, 1])
 
-if prediksi_button:
-    input_df = pd.DataFrame([inputs])
-    input_df = input_df.applymap(extract_int)
+        submitted = st.form_submit_button("🔍 Prediksi Dropout")
 
-    for col in numerical_pca_1 + numerical_pca_2:
-        input_df[[col]] = scalers[col].transform(input_df[[col]])
+    if submitted:
+        df_input = pd.DataFrame([input_data])
+        df_scaled = scaler.transform(df_input)
+        model = models[model_name]
+        pred = model.predict(df_scaled)
+        label = "Dropout" if pred[0] == 1 else "Tidak Dropout"
 
-    for col in categorical_columns:
-        input_df[[col]] = input_df[[col]].astype(str)
-        input_df[[col]] = encoders[col].transform(input_df[[col]])
+        st.success(f"🎯 Prediksi Status Mahasiswa: **{label}**")
 
-    pc1 = pca_1.transform(input_df[numerical_pca_1])
-    pc2 = pca_2.transform(input_df[numerical_pca_2])
-
-    pc1_df = pd.DataFrame(pc1, columns=[f"pc1_{i+1}" for i in range(pc1.shape[1])])
-    pc2_df = pd.DataFrame(pc2, columns=[f"pc2_{i+1}" for i in range(pc2.shape[1])])
-
-    final_df = input_df[categorical_columns].copy()
-    final_df = pd.concat([final_df, pc1_df, pc2_df], axis=1)
-
-    try:
-        final_df = final_df[model.feature_names_in_]
-    except:
-        expected_cols = categorical_columns + [f"pc1_{i+1}" for i in range(5)] + [f"pc2_{i+1}" for i in range(2)]
-        final_df = final_df[expected_cols]
-
-    prediction = model.predict(final_df)
-    label = target_encoder.inverse_transform(prediction)[0]
-
-    st.success(f"🎯 Status Mahasiswa Diprediksi: **{label}**")
+st.markdown("---")
+st.markdown("© 2025 Abdul Rafar · Jaya Jaya Institut")
