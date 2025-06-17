@@ -3,55 +3,47 @@ import pandas as pd
 import numpy as np
 import joblib
 
-# ===============================
-# LOAD MODEL & SCALER
-# ===============================
-model = joblib.load("models/logreg.pkl")  # ganti sesuai model yang ingin dipakai
+# Load model dan scaler
+model = joblib.load("models/logreg.pkl")  # atau model lain sesuai pilihan
 scaler = joblib.load("models/scaler.pkl")
 
-# ===============================
-# UI CONFIGURATION
-# ===============================
-st.set_page_config(page_title="Prediksi Dropout Mahasiswa", layout="wide")
-st.title("🎓 Prediksi Dropout Mahasiswa")
-st.markdown("Isi formulir berikut untuk memprediksi apakah mahasiswa berpotensi **dropout** atau tidak.")
+# Load data bersih untuk ambil urutan dan nama kolom
+data = pd.read_csv("data_bersih.csv")
+fitur = data.drop("Status", axis=1).columns.tolist()
 
-# ===============================
-# INPUT FORM
-# ===============================
-with st.form("form"):
-    col1, col2 = st.columns(2)
-    inputs = {}
+st.title("🎓 Prediksi Risiko Dropout Mahasiswa")
 
-    with col1:
-        inputs["Age_at_enrollment"] = st.number_input("Usia saat mendaftar", min_value=15, max_value=100, value=18)
-        inputs["Admission_grade"] = st.number_input("Nilai masuk (Admission Grade)", min_value=0.0, max_value=200.0)
-        inputs["Previous_qualification_grade"] = st.number_input("Nilai kualifikasi sebelumnya", min_value=0.0, max_value=200.0)
-        inputs["Unemployment_rate"] = st.number_input("Tingkat pengangguran (%)", step=0.1)
-        inputs["Inflation_rate"] = st.number_input("Tingkat inflasi (%)", step=0.1)
-        inputs["GDP"] = st.number_input("GDP", step=0.1)
-        inputs["Scholarship_holder"] = st.selectbox("Penerima beasiswa?", ["0", "1"])
-        inputs["Tuition_fees_up_to_date"] = st.selectbox("Pembayaran biaya kuliah lancar?", ["0", "1"])
+st.markdown("Silakan isi data mahasiswa di bawah ini untuk memprediksi apakah mereka berisiko dropout:")
 
-    with col2:
-        inputs["Curricular_units_1st_sem_enrolled"] = st.number_input("Mata kuliah semester 1 diambil", step=1)
-        inputs["Curricular_units_1st_sem_approved"] = st.number_input("Mata kuliah semester 1 lulus", step=1)
-        inputs["Curricular_units_1st_sem_evaluations"] = st.number_input("Evaluasi semester 1", step=1)
-        inputs["Curricular_units_1st_sem_grade"] = st.number_input("Rata-rata nilai semester 1", step=0.1)
-        inputs["Curricular_units_2nd_sem_enrolled"] = st.number_input("Mata kuliah semester 2 diambil", step=1)
-        inputs["Curricular_units_2nd_sem_approved"] = st.number_input("Mata kuliah semester 2 lulus", step=1)
-        inputs["Curricular_units_2nd_sem_evaluations"] = st.number_input("Evaluasi semester 2", step=1)
-        inputs["Curricular_units_2nd_sem_grade"] = st.number_input("Rata-rata nilai semester 2", step=0.1)
+# Buat input sesuai fitur
+input_dict = {}
 
-    submitted = st.form_submit_button("🔍 Prediksi")
+for kolom in fitur:
+    if "nilai" in kolom.lower() or "gdp" in kolom.lower() or "%" in kolom or "rata" in kolom.lower():
+        # Kolom numerik pecahan
+        input_dict[kolom] = st.number_input(f"{kolom}", format="%.2f", step=0.01)
+    elif data[kolom].nunique() <= 5:
+        # Kolom kategori (biasa bernilai 0/1 atau 0-4)
+        unique_vals = sorted(data[kolom].unique().tolist())
+        input_dict[kolom] = st.selectbox(f"{kolom}", unique_vals)
+    else:
+        # Kolom numerik integer biasa
+        input_dict[kolom] = st.number_input(f"{kolom}", step=1)
 
-# ===============================
-# PREDIKSI
-# ===============================
-if submitted:
-    input_df = pd.DataFrame([inputs])
-    input_scaled = scaler.transform(input_df.values)
-    prediction = model.predict(input_scaled)[0]
-    label = "Dropout" if prediction == 1 else "Tidak Dropout"
+# Ketika tombol ditekan
+if st.button("🔍 Prediksi"):
+    try:
+        input_df = pd.DataFrame([input_dict])[fitur]
+        input_scaled = scaler.transform(input_df)
+        hasil = model.predict(input_scaled)[0]
+        probas = model.predict_proba(input_scaled)[0] if hasattr(model, "predict_proba") else None
 
-    st.success(f"🎯 Prediksi Status Mahasiswa: **{label}**")
+        if hasil == 1:
+            st.error("❌ Mahasiswa diprediksi BERISIKO DROPOUT.")
+        else:
+            st.success("✅ Mahasiswa diprediksi TIDAK dropout.")
+
+        if probas is not None:
+            st.info(f"Probabilitas Dropout: {probas[1]*100:.2f}%")
+    except Exception as e:
+        st.error(f"Terjadi error saat prediksi: {str(e)}")
