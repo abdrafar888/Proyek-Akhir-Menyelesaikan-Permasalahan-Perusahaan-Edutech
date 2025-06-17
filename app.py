@@ -3,34 +3,40 @@ import pandas as pd
 import numpy as np
 import joblib
 
-# Load model dan scaler
-model = joblib.load("models/logreg.pkl")  # atau model lain sesuai pilihan
+model = joblib.load("models/logreg.pkl")
 scaler = joblib.load("models/scaler.pkl")
 
-# Load data bersih untuk ambil urutan dan nama kolom
 data = pd.read_csv("data_bersih.csv")
 fitur = data.drop("Status", axis=1).columns.tolist()
 
 st.title("🎓 Prediksi Risiko Dropout Mahasiswa")
-
 st.markdown("Silakan isi data mahasiswa di bawah ini untuk memprediksi apakah mereka berisiko dropout:")
 
-# Buat input sesuai fitur
 input_dict = {}
 
-for kolom in fitur:
-    if "nilai" in kolom.lower() or "gdp" in kolom.lower() or "%" in kolom or "rata" in kolom.lower():
-        # Kolom numerik pecahan
-        input_dict[kolom] = st.number_input(f"{kolom}", format="%.2f", step=0.01)
-    elif data[kolom].nunique() <= 5:
-        # Kolom kategori (biasa bernilai 0/1 atau 0-4)
-        unique_vals = sorted(data[kolom].unique().tolist())
-        input_dict[kolom] = st.selectbox(f"{kolom}", unique_vals)
-    else:
-        # Kolom numerik integer biasa
-        input_dict[kolom] = st.number_input(f"{kolom}", step=1)
+mapping_dict = {
+    "Gender": {"Perempuan": 0, "Laki-laki": 1},
+    "Scholarship_holder": {"Tidak menerima beasiswa": 0, "Menerima beasiswa": 1},
+    "Debtor": {"Bukan peminjam": 0, "Peminjam": 1},
+    "Tuition_fees_up_to_date": {"Belum lunas": 0, "Sudah lunas": 1},
+    "Displaced": {"Tidak": 0, "Ya": 1},
+    "Educational_special_needs": {"Tidak": 0, "Ya": 1},
+    "International": {"Bukan mahasiswa internasional": 0, "Mahasiswa internasional": 1}
+}
 
-# Ketika tombol ditekan
+for kolom in fitur:
+    if kolom in mapping_dict:
+        display_options = list(mapping_dict[kolom].keys())
+        pilihan = st.selectbox(kolom.replace("_", " "), display_options)
+        input_dict[kolom] = mapping_dict[kolom][pilihan]
+    elif "nilai" in kolom.lower() or "gdp" in kolom.lower() or "%" in kolom or "rata" in kolom.lower():
+        input_dict[kolom] = st.number_input(kolom.replace("_", " "), format="%.2f", step=0.01)
+    elif data[kolom].nunique() <= 5:
+        unique_vals = sorted(data[kolom].unique().tolist())
+        input_dict[kolom] = st.selectbox(kolom.replace("_", " "), unique_vals)
+    else:
+        input_dict[kolom] = st.number_input(kolom.replace("_", " "), step=1)
+
 if st.button("🔍 Prediksi"):
     try:
         input_df = pd.DataFrame([input_dict])[fitur]
@@ -46,4 +52,4 @@ if st.button("🔍 Prediksi"):
         if probas is not None:
             st.info(f"Probabilitas Dropout: {probas[1]*100:.2f}%")
     except Exception as e:
-        st.error(f"Terjadi error saat prediksi: {str(e)}") 
+        st.error("Terjadi error saat prediksi.")
